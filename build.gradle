@@ -1,0 +1,30 @@
+plugins {
+    id 'java'
+    id 'com.gradleup.shadow' version '9.4.1'
+}
+
+group = 'org.aliceincradle.kaleidoscopic'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+
+shadowJar {
+    manifest {
+        attributes 'Main-Class': 'org.aliceincradle.sync.SyncServer'
+    }
+}
+dependencies {
+    testImplementation platform('org.junit:junit-bom:5.10.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    implementation 'org.java-websocket:Java-WebSocket:1.5.3'
+    implementation 'com.google.code.gson:gson:2.13.2'
+    implementation 'org.slf4j:slf4j-simple:2.0.7'
+}
+
+test {
+    useJUnitPlatform()
+}
