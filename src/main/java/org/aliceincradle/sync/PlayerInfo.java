@@ -10,4 +10,10 @@ public class PlayerInfo {
     public String poseTitle;
     public String characterTitle;
     public String caneName;
+    public float hp, hpmax;
+    public float mp, mpmax;
+    public int curMgKindInt;
+    public int aimInt;
+    public float curMgReduceMp;
+    public float skillMpHold;
 }
