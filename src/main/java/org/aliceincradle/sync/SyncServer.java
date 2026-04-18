@@ -10,10 +10,17 @@ import org.java_websocket.server.WebSocketServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.swing.SwingUtilities;
+import javax.swing.*;
 import java.net.InetSocketAddress;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class SyncServer extends WebSocketServer {
     
@@ -28,6 +35,28 @@ public class SyncServer extends WebSocketServer {
     public SyncServer(int port, ServerGUI gui) {
         super(new InetSocketAddress(port));
         this.gui = gui;
+    }
+    
+    public static void main(String[] args) {
+        // 1. 优先初始化扁平化暗黑主题
+        FlatDarkLaf.setup();
+        
+        // 2. 必须在 EDT 线程中创建和显示 GUI
+        SwingUtilities.invokeLater(() -> {
+            ServerGUI gui = new ServerGUI();
+            gui.setVisible(true);
+            
+            // 3. 在 GUI 准备完毕后，异步启动 WebSocket 服务器，防止阻塞主窗口线程
+            new Thread(() -> {
+                try {
+                    int port = 25560;
+                    SyncServer server = new SyncServer(port, gui);
+                    server.start();
+                } catch (Exception e) {
+                    gui.log("[Fatal] 服务端启动失败: " + e.getMessage());
+                }
+            }, "Server-Boot-Thread").start();
+        });
     }
     
     @Override
@@ -52,20 +81,31 @@ public class SyncServer extends WebSocketServer {
             String clazz = jsonObject.get("clazz").getAsString();
             
             PlayerState state = clientStates.get(conn);
-            if (state == null) return;
+            if (state == null)
+                return;
             
             switch (clazz) {
-                case "ClientBoundVlanChangedPacket":
-                    Packet.ClientBoundVlanChangedPacket vlanPkt = gson.fromJson(message, Packet.ClientBoundVlanChangedPacket.class);
+                case "ClientBoundVlanChangedPacket" -> {
+                    Packet.ClientBoundVlanChangedPacket vlanPkt = gson.fromJson(message,
+                                                                                Packet.ClientBoundVlanChangedPacket.class);
                     state.vlan = vlanPkt.vlan;
-                    break;
+                }
                 
-                case "ClientBoundPlayerSyncPacket":
-                    Packet.ClientBoundPlayerSyncPacket syncPkt = gson.fromJson(message, Packet.ClientBoundPlayerSyncPacket.class);
+                case "ClientBoundPlayerSyncPacket" -> {
+                    Packet.ClientBoundPlayerSyncPacket syncPkt = gson.fromJson(message,
+                                                                               Packet.ClientBoundPlayerSyncPacket.class);
                     if (syncPkt.info != null) {
                         state.playerInfo = syncPkt.info;
                     }
-                    break;
+                }
+                
+                case "ClientBoundEnemySyncPacket" -> {
+                    Packet.ClientBoundEnemySyncPacket esync = gson.fromJson(message,
+                                                                            Packet.ClientBoundEnemySyncPacket.class);
+                    if (esync != null) {
+                        state.enemyInfos = esync.enemyInfos;
+                    }
+                }
             }
         } catch (Exception e) {
             gui.log("[!] 异常包解析失败: " + e.getMessage());
@@ -89,7 +129,7 @@ public class SyncServer extends WebSocketServer {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2); // 扩展为核心线程池
         
         // 任务 1：高频广播逻辑 (60Hz -> 16ms 间隔)
-        scheduler.scheduleAtFixedRate(this::broadcastSync, 0, 16, TimeUnit.MILLISECONDS);
+        scheduler.scheduleAtFixedRate(this::broadcastSync, 0, 50, TimeUnit.MILLISECONDS);
         
         // 任务 2：低频 UI 刷新逻辑 (2Hz -> 500ms 间隔)
         // 界面不需要 60Hz 刷新，半秒更新一次足够了，减轻 EDT 负担
@@ -106,8 +146,8 @@ public class SyncServer extends WebSocketServer {
         
         // 迭代 ConcurrentHashMap 是弱一致性安全的
         for (PlayerState state : clientStates.values()) {
-            String name = (state.playerInfo != null && state.playerInfo.playerName != null)
-                          ? state.playerInfo.playerName : "连接中...";
+            String name = (state.playerInfo != null && state.playerInfo.playerName != null) ?
+                          state.playerInfo.playerName : "连接中...";
             
             // 【修改点】：直接将 Ping 写死为 -1 ms
             if (index < rowData.length) {
@@ -125,53 +165,28 @@ public class SyncServer extends WebSocketServer {
         for (Map.Entry<WebSocket, PlayerState> entry : clientStates.entrySet()) {
             WebSocket ws = entry.getKey();
             PlayerState state = entry.getValue();
-            if (state.playerInfo == null) continue;
+            if (state.playerInfo == null)
+                continue;
             vlanRooms.computeIfAbsent(state.vlan, k -> new ArrayList<>()).add(ws);
         }
-        
-        for (List<WebSocket> roomClients : vlanRooms.values()) {
-            // if (roomClients.size() < 2) continue; // 没人或单机无需广播
-            
-            List<PlayerInfo> roomInfos = new ArrayList<>();
-            for (WebSocket ws : roomClients) {
-                roomInfos.add(clientStates.get(ws).playerInfo);
-            }
-            
-            for (WebSocket client : roomClients) {
-                if (!client.isOpen() || client.hasBufferedData()) continue;
-                
-                PlayerInfo selfInfo = clientStates.get(client).playerInfo;
-                PlayerInfo[] others = roomInfos.stream()
-                    .filter(info -> info != selfInfo)
-                    .toArray(PlayerInfo[]::new);
-                
-                if (others.length > 0) {
-                    Packet.ServerBoundOtherPlayersSyncPacket outPkt = new Packet.ServerBoundOtherPlayersSyncPacket(others);
-                    client.send(gson.toJson(outPkt));
-                }
-            }
-        }
-    }
-    
-    public static void main(String[] args) {
-        // 1. 优先初始化扁平化暗黑主题
-        FlatDarkLaf.setup();
-        
-        // 2. 必须在 EDT 线程中创建和显示 GUI
-        SwingUtilities.invokeLater(() -> {
-            ServerGUI gui = new ServerGUI();
-            gui.setVisible(true);
-            
-            // 3. 在 GUI 准备完毕后，异步启动 WebSocket 服务器，防止阻塞主窗口线程
-            new Thread(() -> {
-                try {
-                    int port = 25560;
-                    SyncServer server = new SyncServer(port, gui);
-                    server.start();
-                } catch (Exception e) {
-                    gui.log("[Fatal] 服务端启动失败: " + e.getMessage());
-                }
-            }, "Server-Boot-Thread").start();
+        // rewrite. what shit AI code
+        vlanRooms.forEach((vlan, clients) -> {
+            // broadcast playerInfo and enemyInfo
+            // how?
+            clients.forEach(client -> {
+                if(client.hasBufferedData()) return;
+                boolean loopback = 1 == 0;
+                List<PlayerState> others = clients.stream().filter(c -> c.isOpen())
+                    .filter(c -> loopback || c != client).map(c -> clientStates.get(c)).toList();
+                // generate others
+                PlayerInfo[] otherPlayers = others.stream().map(o -> o.playerInfo)
+                    .filter(i -> i != null).toArray(PlayerInfo[]::new);
+                EnemyInfo[] otherEnemies = others.stream().map(o -> o.enemyInfos)
+                    .filter(e -> e != null).flatMap(e -> Arrays.stream(e))
+                    .toArray(EnemyInfo[]::new);
+                client.send(gson.toJson(new Packet.ServerBoundOtherPlayersSyncPacket(otherPlayers)));
+                client.send(gson.toJson(new Packet.ServerBoundOtherEnemiesSyncPacket(otherEnemies)));
+            });
         });
     }
 }
