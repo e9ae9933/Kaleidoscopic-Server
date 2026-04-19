@@ -15,4 +15,6 @@ public class EnemyInfo {
     public float hp, hpmax;
     public float mp, mpmax;
     public int aimInt;
+    
+    public EnemyBoundingBox bbox;
 }

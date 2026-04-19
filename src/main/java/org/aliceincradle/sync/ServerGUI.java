@@ -21,7 +21,7 @@ public class ServerGUI extends JFrame {
     
     public ServerGUI() {
         // 1. 窗口基础设置
-        setTitle("Kaleidoscopic-Server 控制台");
+        setTitle("Kaleidoscopic-Server Infdev 控制台");
         setSize(1000, 650);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
@@ -39,7 +39,7 @@ public class ServerGUI extends JFrame {
         
         // 2.2 玩家列表 (底部)
         // 关于延迟：如果暂不动底层包代码，我们可以在服务端收到任意包时记录时间戳，计算差值作为“伪Ping”
-        String[] columnNames = {"玩家名称", "Ping (ms)"};
+        String[] columnNames = {"玩家名称", "Ping (ms)", "保护模式"};
         playerTableModel = new DefaultTableModel(columnNames, 0) {
             @Override
             public boolean isCellEditable(int row, int column) { return false; } // 禁止手动编辑
@@ -90,7 +90,7 @@ public class ServerGUI extends JFrame {
         add(commandField, BorderLayout.SOUTH);
         
         // 模拟启动信息
-        log("[System] Kaleidoscopic-Server GUI 初始化完成...");
+        log("[System] Kaleidoscopic-Server Infdev GUI 初始化完成...");
         log("[System] 正在等待网络层接入...");
     }
     

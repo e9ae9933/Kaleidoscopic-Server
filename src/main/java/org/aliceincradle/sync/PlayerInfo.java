@@ -14,6 +14,7 @@ public class PlayerInfo {
     public float mp, mpmax;
     public int curMgKindInt;
     public int aimInt;
+    public int mghitInt;
     public float curMgReduceMp;
     public float skillMpHold;
 }
