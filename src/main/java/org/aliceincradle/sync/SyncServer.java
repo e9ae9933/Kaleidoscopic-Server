@@ -15,6 +15,7 @@ import java.io.ByteArrayOutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
@@ -146,6 +147,12 @@ public class SyncServer extends WebSocketServer {
                     }
                 }
                 
+                case "ClientBoundBboxPacket" -> {
+                    Packet.ClientBoundBboxPacket p;
+                    p = gson.fromJson(message, Packet.ClientBoundBboxPacket.class);
+                    state.bboxes = p.bboxes;
+                }
+                
                 case "ClientBoundDmgCounterPacket" -> {
                     Packet.ClientBoundDmgCounterPacket dp = gson.fromJson(message,
                                                                           Packet.ClientBoundDmgCounterPacket.class);
@@ -246,7 +253,8 @@ public class SyncServer extends WebSocketServer {
                 rowData[index++] = new Object[]{name, "%d ms / %.3fs".formatted(state.ping,
                                                                                 (System.currentTimeMillis() -
                                                                                  state.lastPing) /
-                                                                                1000.0), state.isProtectedMode};
+                                                                                1000.0),
+                    state.isProtectedMode};
             }
         }
         
@@ -300,7 +308,7 @@ public class SyncServer extends WebSocketServer {
                 // generate others
                 PlayerInfo[] otherPlayers = others.stream().map(o -> o.playerInfo)
                     .filter(i -> i != null).toArray(PlayerInfo[]::new);
-                client.send(gson.toJson(new Packet.ServerBoundOtherPlayersSyncPacket(otherPlayers)));
+                send(client, new Packet.ServerBoundOtherPlayersSyncPacket(otherPlayers));
                 
                 // 2. 【核心修改】平铺怪物数组与对应的 Token 数组
                 List<EnemyInfo> enemyList = new ArrayList<>();
@@ -320,8 +328,13 @@ public class SyncServer extends WebSocketServer {
                 long[] remoteTokens = tokenList.stream().mapToLong(l -> l).toArray();
                 
                 // 3. 调用更新后的双参数构造函数发送
-                client.send(gson.toJson(new Packet.ServerBoundOtherEnemiesSyncPacket(otherEnemies
-                    , remoteTokens)));
+                send(client, new Packet.ServerBoundOtherEnemiesSyncPacket(otherEnemies,
+                                                                          remoteTokens));
+                
+                BoundingBox[] otherBboxes = others.stream().map(s -> s.bboxes)
+                    .filter(s -> s != null).flatMap(s -> Arrays.stream(s))
+                    .toArray(BoundingBox[]::new);
+                send(client, new Packet.ServerBoundBboxPacket(otherBboxes));
             });
         });
     }

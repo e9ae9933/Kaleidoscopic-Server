@@ -104,6 +104,7 @@ public abstract class Packet {
     
     public static class ServerBoundProtectedModePacket extends ServerBoundPacket {
         public String payload;
+        
         public ServerBoundProtectedModePacket(String payload) {
             super();
             this.payload = payload;
@@ -112,5 +113,18 @@ public abstract class Packet {
     
     public static class ClientBoundProtectedModePacket extends ClientBoundPacket {
         public String payload;
+    }
+    
+    public static class ClientBoundBboxPacket extends ClientBoundPacket {
+        public BoundingBox[] bboxes;
+    }
+    
+    public static class ServerBoundBboxPacket extends ServerBoundPacket {
+        public BoundingBox[] bboxes;
+        
+        public ServerBoundBboxPacket(BoundingBox[] bboxes) {
+            super();
+            this.bboxes = bboxes;
+        }
     }
 }

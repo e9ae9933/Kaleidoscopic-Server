@@ -1,9 +1,10 @@
 package org.aliceincradle.sync;
 
-public class EnemyBoundingBox {
+public class BoundingBox {
+    public long token;
+    public String key;
+    public float mapX, mapY;
     public float width, height;
-    
-    // how can this even happen.
     public float[] x;
     public float[] y;
 }

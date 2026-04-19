@@ -12,4 +12,5 @@ public class PlayerState {
     public long lastPing = 0;
     public boolean isProtectedMode = false;
     public transient final Queue<Packet> pendingPackets = new LinkedList<>();
+    BoundingBox[] bboxes = null;
 }
