@@ -263,6 +263,7 @@ public class SyncServer extends WebSocketServer {
     }
     
     private void tick() {
+        long begin = System.currentTimeMillis();
         while (!messageQueue.isEmpty()) {
             SingleMessage message = messageQueue.poll();
             try {
@@ -274,6 +275,8 @@ public class SyncServer extends WebSocketServer {
         calcPing();
         broadcastSync();
         flushSockets();
+        long end = System.currentTimeMillis();
+        log.info("now has " + (end - begin));
     }
     
     private void calcPing() {
@@ -300,8 +303,9 @@ public class SyncServer extends WebSocketServer {
             // broadcast playerInfo and enemyInfo
             // how?
             clients.forEach(client -> {
-                if (client.hasBufferedData())
-                    return;
+                if (client.hasBufferedData()) {
+                    log.info("skipped buffered data");
+                }
                 boolean loopback = 1 == 0;
                 List<PlayerState> others = clients.stream().filter(c -> c.isOpen())
                     .filter(c -> loopback || c != client).map(c -> clientStates.get(c)).toList();
@@ -353,10 +357,13 @@ public class SyncServer extends WebSocketServer {
             if (!ws.isOpen() || state.pendingPackets.isEmpty()) {
                 return;
             }
+            if (ws.hasBufferedData())
+                return;
             List<Packet> pending = new ArrayList<>();
             while (!state.pendingPackets.isEmpty())
                 pending.add(state.pendingPackets.poll());
             String rawJson = gson.toJson(pending);
+            // log.debug("raw json: {}", rawJson);
             try {
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 try (GZIPOutputStream gzip = new GZIPOutputStream(baos)) {
@@ -364,6 +371,8 @@ public class SyncServer extends WebSocketServer {
                     gzip.finish();
                 }
                 String payload = Base64.getEncoder().encodeToString(baos.toByteArray());
+                // System.out.println(payload);
+                // log.debug("payload: {}", payload);
                 Packet.ServerBoundProtectedModePacket compressedPacket =
                     new Packet.ServerBoundProtectedModePacket(payload);
                 ws.send(gson.toJson(compressedPacket));
